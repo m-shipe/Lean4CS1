@@ -269,6 +269,88 @@ to `List` before `Foldable` existed to say so.
 @@@ -/
 
 /- @@@
+## A Second Example: `LawfulMap`
+
+`Foldable` followed one recipe: a typeclass over a *container*
+`F : Type → Type`; a method whose own *element types* (`α`/`β`)
+are separate parameters, not fixed by `F`; and, same as `Monoid`,
+laws bundled in as proof fields so only well-behaved instances
+compile. `map` fits the same recipe.
+
+The two laws say what "map" has to mean for *any* container, not
+just `List`: `mapId` says mapping the identity function changes
+nothing -- same shape, nothing dropped or duplicated. `mapComp`
+says mapping with `g` and then `h` matches mapping with their
+composite in one pass -- each element is transformed on its own,
+in place, independent of the other elements and independent of
+whether you do it in one step or two.
+@@@ -/
+
+class LawfulMap (F : Type → Type) where
+  map     : {α β : Type} → (α → β) → F α → F β
+  mapId   : ∀ {α : Type} (xs : F α), map id xs = xs
+  mapComp : ∀ {α β γ : Type} (g : α → β) (h : β → γ) (xs : F α),
+    map (h ∘ g) xs = map h (map g xs)
+
+/- @@@
+`List`'s instance is `List.map` itself, with the two laws proved
+by induction on the list.
+@@@ -/
+
+instance : LawfulMap List where
+  map     := List.map
+  mapId   := by intro α xs; induction xs <;> simp_all
+  mapComp := by intro α β γ g h xs; induction xs <;> simp_all
+
+/- @@@
+`Option`'s instance leaves `none` alone and maps under `some` --
+both laws check by cases, no induction needed since there's no
+recursive structure to induct on.
+@@@ -/
+
+instance : LawfulMap Option where
+  map     := Option.map
+  mapId   := by intro α xs; cases xs <;> rfl
+  mapComp := by intro α β γ g h xs; cases xs <;> rfl
+
+/- @@@
+`Tree`'s instance is `treeMap`, structured exactly like `treeFoldr`
+above: recurse left, transform the value, recurse right. Same
+self-recursion rule applies -- it's a plain `def` first, not
+written directly inside the `instance`. The two laws then follow
+by induction on the tree, exactly as they did for `List`.
+@@@ -/
+
+def treeMap {α β : Type} (f : α → β) : Tree α → Tree β
+| Tree.leaf => Tree.leaf
+| Tree.node l v r => Tree.node (treeMap f l) (f v) (treeMap f r)
+
+instance : LawfulMap Tree where
+  map     := treeMap
+  mapId   := by intro α xs; induction xs <;> simp_all [treeMap]
+  mapComp := by intro α β γ g h xs; induction xs <;> simp_all [treeMap]
+
+#eval LawfulMap.map (· + 1) [1, 2, 3]            -- [2, 3, 4]
+#eval LawfulMap.map (· + 1) (some 5)             -- some 6
+#eval LawfulMap.map (· + 1) (none : Option Nat)  -- none
+#eval LawfulMap.map (· + 1) sampleTree            -- Tree with 2, 3, 4
+
+/- @@@
+And exactly like `Foldable.foldr` bought `toList`/`size`/`fold`
+for free, `LawfulMap.map` alone is enough to write one generic
+function that works over any container at all -- no `F`-specific
+code, just the method the laws are attached to.
+@@@ -/
+
+def increment {F : Type → Type} [LawfulMap F] (xs : F Nat) : F Nat :=
+  LawfulMap.map (· + 1) xs
+
+#eval increment [1, 2, 3]            -- [2, 3, 4]
+#eval increment (some 5)             -- some 6
+#eval increment (none : Option Nat)  -- none
+#eval increment sampleTree            -- Tree with 2, 3, 4
+
+/- @@@
 ## EXERCISES
 
 1. Give `Array` a `Foldable` instance (Lean's `Array.foldr` has
