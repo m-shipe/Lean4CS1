@@ -313,4 +313,76 @@ to `List` before `Foldable` existed to say so.
    buy you that `ForIn`'s `forIn` doesn't, and vice versa?
 @@@ -/
 
+instance : Foldable Array where
+ foldr := Array.foldr
+
+def arrayExample : Array Nat := #[1, 2, 3, 4]
+
+#eval toList arrayExample -- [1, 2, 3, 4]
+#eval size arrayExample   -- 4
+#eval fold (α := Nat) arrayExample -- 10
+
+def sum {F : Type → Type} [Foldable F] (xs : F Nat) : Nat :=
+ Foldable.foldr (fun n total => n + total) 0 xs
+
+def natMulMonoid : Monoid Nat where
+ op      := (· * ·)
+ id      := 1
+ assoc   := Nat.mul_assoc
+ idLeft  := Nat.one_mul
+ idRight := Nat.mul_one
+
+def product {F : Type → Type} [Foldable F] (xs : F Nat) : Nat :=
+ Foldable.foldr natMulMonoid.op natMulMonoid.id xs
+
+#eval sum sampleTree -- 6
+#eval sum [1, 2, 3] -- 6
+#eval sum arrayExample -- 10
+#eval sum (some 5) -- 5
+#eval product [2, 3, 4] -- 24
+#eval product sampleTree -- 6
+
+def any {F : Type → Type} [Foldable F] {α : Type}
+   (p : α → Bool) (xs : F α) : Bool :=
+ Foldable.foldr (fun x result => p x || result) false xs
+
+def all {F : Type → Type} [Foldable F] {α : Type}
+   (p : α → Bool) (xs : F α) : Bool :=
+ Foldable.foldr (fun x result => p x && result) true xs
+
+#eval any (fun n => n == 2) sampleTree -- true
+#eval all (fun n => n > 0) sampleTree -- true
+#eval any (fun n => n == 4) [1, 2, 3] -- false
+#eval all (fun n => n < 3) [1, 2, 3] -- false
+
+inductive PreTree (α : Type) where
+| leaf
+| node (v : α) (l : PreTree α) (r : PreTree α)
+
+def preTreeFoldr {α β : Type} (f : α → β → β) (z : β) : PreTree α → β
+| PreTree.leaf => z
+| PreTree.node v l r => f v (preTreeFoldr f (preTreeFoldr f z r) l)
+
+instance : Foldable PreTree where
+ foldr := preTreeFoldr
+
+def samplePreTree : PreTree Nat :=
+ PreTree.node 2
+   (PreTree.node 1 PreTree.leaf PreTree.leaf)
+   (PreTree.node 3 PreTree.leaf PreTree.leaf)
+
+#eval toList sampleTree -- [1, 2, 3] (in-order)
+#eval toList samplePreTree -- [2, 1, 3] (pre-order)
+
+/- `Foldable.foldr` is a pure, generic catamorphism: it consumes a
+container and combines every element into one result, so the result
+can be any type and the combining function can build a list, count
+elements, compute a Boolean, or combine a monoid. `ForIn` is instead
+the protocol behind `for` loops: its `forIn` method threads an
+explicit state through an effectful body and can support early
+termination with `break`/`continue`-style control. Thus `Foldable`
+gives a reusable value-producing fold with no effects, while `ForIn`
+gives flexible effectful iteration but does not by itself specify a
+single accumulated result or a pure fold operation. -/
+
 end GeneralizedFold

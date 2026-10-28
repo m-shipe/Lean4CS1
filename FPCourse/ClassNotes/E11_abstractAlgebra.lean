@@ -482,4 +482,68 @@ under friendlier names than `foldMonoid`/`foldAddMonoid`:
    `String` instance above.
 @@@ -/
 
+
+-- 1. Addition identity on Nat
+example : isIdentityFor (α := Nat) (· + ·) 0 :=
+  fun a => ⟨Nat.zero_add a, Nat.add_zero a⟩
+
+-- 2. Boolean conjunction monoid
+instance : Monoid Bool where
+  op      := (· && ·)
+  id      := true
+  assoc   := Bool.and_assoc
+  idLeft  := Bool.true_and
+  idRight := Bool.and_true
+
+-- Separate Boolean disjunction monoid value
+set_option warn.classDefReducibility false in
+def boolOrMonoid : Monoid Bool where
+  op      := (· || ·)
+  id      := false
+  assoc   := Bool.or_assoc
+  idLeft  := Bool.false_or
+  idRight := Bool.or_false
+
+-- 3. Fold using an explicit Monoid argument
+def mfoldWith {α : Type} (m : Monoid α) : List α → α
+| List.nil      => m.id
+| List.cons h t => m.op h (mfoldWith m t)
+
+#eval mfoldWith natMulMonoid [2, 3, 4]   -- 24
+
+example : mfoldWith natMulMonoid [2, 3, 4] = productNat [2, 3, 4] := by
+  rfl
+
+-- 4. Nat.div is not associative
+example : (8 / 4) / 2 ≠ 8 / (4 / 2) := by
+  decide
+
+-- 5. List append monoid
+instance : Monoid (List α) where
+  op      := (· ++ ·)
+  id      := []
+  assoc   := List.append_assoc
+  idLeft  := List.nil_append
+  idRight := List.append_nil
+
+def dec: Nat → Option Nat
+| 0 => none
+| (n' + 1) => n'
+
+#eval dec 0
+#eval dec 1
+
+def head {x : Type} : List x → Option x
+| List.nil        => none
+| List.cons h _   => some h
+
+def myfold {α : Type} (f : α → α → α) (id : α) : List α → α
+| [] => id
+| h::t => f h (myfold f id t)
+
+#eval myfold (· + ·) 0 [1, 2, 3] -- 6
+#eval myfold (· * ·) 1 [2, 4, 8] -- 64
+
+
+
 end AbstractAlgebra
